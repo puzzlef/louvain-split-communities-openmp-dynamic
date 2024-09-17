@@ -30,7 +30,7 @@ using std::max;
  * @returns louvain result
  */
 template <int SPLIT_CHUNK=2048, bool DYNAMIC=false, class G, class FI, class FM, class FA>
-inline auto louvainSplitIterationInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM fm, FA fa) {
+inline auto louvainSplitInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM fm, FA fa) {
   using  K = typename G::key_type;
   using  W = LOUVAIN_WEIGHT_TYPE;
   using  B = char;
@@ -112,7 +112,6 @@ inline auto louvainSplitIterationInvokeOmp(const G& x, const LouvainOptions& o, 
         l += max(m, 1); ++p;
         if (m<=1 || p>=P) break;
         size_t GN = isFirst? x.order() : y.order();
-        size_t GS = isFirst? x.span()  : y.span();
         size_t CN = 0;
         if (isFirst) CN = louvainCommunityExistsOmpW(cv.degrees, x, ucom);
         else         CN = louvainCommunityExistsOmpW(cv.degrees, y, vcom);
@@ -280,7 +279,7 @@ inline auto louvainSplitDynamicDeltaScreeningOmp(const G& y, const vector<tuple<
  * @returns louvain result
  */
 template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
-inline auto louvainDynamicFrontierOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
+inline auto louvainSplitDynamicFrontierOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
   vector2d<K> qs;
   vector2d<W> qvtots, qctots;
   louvainSetupInitialsW(qs, qvtots, qctots, q, qvtot, qctot, o.repeat);

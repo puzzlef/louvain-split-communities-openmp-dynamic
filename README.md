@@ -79,7 +79,7 @@ The code structure of GSP-Louvain is as follows:
 - inc/mtx.hxx: Graph file reading functions
 - inc/properties.hxx: Graph Property functions
 - inc/selfLoop.hxx: Graph Self-looping functions
-- inc/symmetricize.hxx: Graph Symmetricization functions
+- inc/symmetrize.hxx: Graph Symmetricization functions
 - inc/transpose.hxx: Graph transpose functions
 - inc/update.hxx: Update functions
 - main.cxx: Experimentation code
