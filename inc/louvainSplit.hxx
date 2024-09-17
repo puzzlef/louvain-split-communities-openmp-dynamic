@@ -180,4 +180,123 @@ inline auto louvainSplitStaticOmp(const G& x, const LouvainOptions& o={}) {
 }
 #endif
 #pragma endregion
+
+
+
+
+#pragma region NAIVE-DYNAMIC APPROACH
+#ifdef OPENMP
+/**
+ * Obtain the community membership of each vertex with Naive-dynamic Louvain.
+ * @param y updated graph
+ * @param deletions edge deletions for this batch update (undirected)
+ * @param insertions edge insertions for this batch update (undirected)
+ * @param q initial community each vertex belongs to
+ * @param qvtot initial total edge weight of each vertex
+ * @param qctot initial total edge weight of each community
+ * @param o louvain options
+ * @returns louvain result
+ */
+template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+inline auto louvainSplitNaiveDynamicOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
+  using B = char;
+  vector2d<K> qs;
+  vector2d<W> qvtots, qctots;
+  louvainSetupInitialsW(qs, qvtots, qctots, q, qvtot, qctot, o.repeat);
+  int  r  = 0;
+  auto fi = [&](auto& vcom, auto& vtot, auto& ctot)  {
+    vcom = move(qs[r]);
+    vtot = move(qvtots[r]);
+    ctot = move(qctots[r]); ++r;
+    louvainUpdateWeightsFromOmpU(vtot, ctot, y, deletions, insertions, vcom);
+  };
+  auto fm = [ ](auto& vaff, const auto& vcom, const auto& vtot, const auto& ctot, auto& vcs,  auto& vcout) {
+    fillValueOmpU(vaff, B(1));
+  };
+  auto fa = [ ](auto u) { return true; };
+  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region DYNAMIC DELTA-SCREENING
+#ifdef OPENMP
+/**
+ * Obtain the community membership of each vertex with Dynamic Delta-screening Louvain.
+ * @param y updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @param q initial community each vertex belongs to
+ * @param qvtot initial total edge weight of each vertex
+ * @param qctot initial total edge weight of each community
+ * @param o louvain options
+ * @returns louvain result
+ */
+template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+inline auto louvainSplitDynamicDeltaScreeningOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
+  using  B = char;
+  size_t S = y.span();
+  double R = o.resolution;
+  double M = edgeWeightOmp(y)/2;
+  int    T = omp_get_max_threads();
+  vector<B> vertices(S), neighbors(S), communities(S);
+  vector2d<K> qs;
+  vector2d<W> qvtots, qctots;
+  louvainSetupInitialsW(qs, qvtots, qctots, q, qvtot, qctot, o.repeat);
+  int  r  = 0;
+  auto fi = [&](auto& vcom, auto& vtot, auto& ctot) {
+    vcom = move(qs[r]);
+    vtot = move(qvtots[r]);
+    ctot = move(qctots[r]); ++r;
+    louvainUpdateWeightsFromOmpU(vtot, ctot, y, deletions, insertions, vcom);
+  };
+  auto fm = [&](auto& vaff, auto& vcs, auto& vcout, const auto& vcom, const auto& vtot, const auto& ctot) {
+    louvainAffectedVerticesDeltaScreeningOmpW(vertices, neighbors, communities, vcs, vcout, y, deletions, insertions, vcom, vtot, ctot, M, R);
+    copyValuesOmpW(vaff, vertices);
+  };
+  auto fa = [&](auto u) { return vertices[u] == B(1); };
+  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+}
+#endif
+#pragma endregion
+
+
+
+
+#pragma region DYNAMIC FRONTIER APPROACH
+#ifdef OPENMP
+/**
+ * Obtain the community membership of each vertex with Dynamic Frontier Louvain.
+ * @param y updated graph
+ * @param deletions edge deletions in batch update
+ * @param insertions edge insertions in batch update
+ * @param q initial community each vertex belongs to
+ * @param qvtot initial total edge weight of each vertex
+ * @param qctot initial total edge weight of each community
+ * @param o louvain options
+ * @returns louvain result
+ */
+template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+inline auto louvainDynamicFrontierOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
+  vector2d<K> qs;
+  vector2d<W> qvtots, qctots;
+  louvainSetupInitialsW(qs, qvtots, qctots, q, qvtot, qctot, o.repeat);
+  int  r  = 0;
+  auto fi = [&](auto& vcom, auto& vtot, auto& ctot) {
+    vcom = move(qs[r]);
+    vtot = move(qvtots[r]);
+    ctot = move(qctots[r]); ++r;
+    louvainUpdateWeightsFromOmpU(vtot, ctot, y, deletions, insertions, vcom);
+  };
+  auto fm = [&](auto& vaff, auto& vcs, auto& vcout, const auto& vcom, const auto& vtot, const auto& ctot) {
+    louvainAffectedVerticesFrontierOmpW(vaff, y, deletions, insertions, vcom);
+  };
+  auto fa = [ ](auto u) { return true; };
+  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+}
+#endif
+#pragma endregion
 #pragma endregion
