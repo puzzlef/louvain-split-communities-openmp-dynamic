@@ -29,7 +29,7 @@ using std::max;
  * @param fa is vertex allowed to be updated? (u)
  * @returns louvain result
  */
-template <int SPLIT_CHUNK=2048, bool DYNAMIC=false, class G, class FI, class FM, class FA>
+template <bool DYNAMIC=false, class G, class FI, class FM, class FA>
 inline auto louvainSplitInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM fm, FA fa) {
   using  K = typename G::key_type;
   using  W = LOUVAIN_WEIGHT_TYPE;
@@ -45,6 +45,7 @@ inline auto louvainSplitInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM
   // Allocate buffers.
   int    T = omp_get_max_threads();
   vector<B> vaff(S);        // Affected vertex flag (any pass)
+  vector<B> cbsy(S);        // Community busy flag (any pass)
   vector<K> ucom, vcom(S);  // Community membership (first pass, current pass)
   vector<W> utot, vtot(S);  // Total vertex weights (first pass, current pass)
   vector<W> ctot;           // Total community weights (any pass)
@@ -106,8 +107,8 @@ inline auto louvainSplitInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM
         });
         ts += measureDuration([&]() {
           // TODO: Split only touched (which nodes leave) communities.
-          if (isFirst) { splitDisconnectedCommunitiesBfsOmpW<SPLIT_CHUNK>(tcom, vaff, us, vs, x, ucom); swap(ucom, tcom); }
-          else         { splitDisconnectedCommunitiesBfsOmpW<SPLIT_CHUNK>(tcom, vaff, us, vs, y, vcom); swap(vcom, tcom); }
+          if (isFirst) { splitDisconnectedCommunitiesBfsOmpW(tcom, cbsy, vaff, us, vs, x, ucom); swap(ucom, tcom); }
+          else         { splitDisconnectedCommunitiesBfsOmpW(tcom, cbsy, vaff, us, vs, y, vcom); swap(vcom, tcom); }
         });
         l += max(m, 1); ++p;
         if (m<=1 || p>=P) break;
@@ -164,7 +165,7 @@ inline auto louvainSplitInvokeOmp(const G& x, const LouvainOptions& o, FI fi, FM
  * @param o louvain options
  * @returns louvain result
  */
-template <int SPLIT_CHUNK=2048, class G>
+template <class G>
 inline auto louvainSplitStaticOmp(const G& x, const LouvainOptions& o={}) {
   using B = char;
   auto fi = [&](auto& vcom, auto& vtot, auto& ctot)  {
@@ -175,7 +176,7 @@ inline auto louvainSplitStaticOmp(const G& x, const LouvainOptions& o={}) {
     fillValueOmpU(vaff, B(1));
   };
   auto fa = [ ](auto u) { return true; };
-  return louvainSplitInvokeOmp<SPLIT_CHUNK, false>(x, o, fi, fm, fa);
+  return louvainSplitInvokeOmp<false>(x, o, fi, fm, fa);
 }
 #endif
 #pragma endregion
@@ -196,7 +197,7 @@ inline auto louvainSplitStaticOmp(const G& x, const LouvainOptions& o={}) {
  * @param o louvain options
  * @returns louvain result
  */
-template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+template <class G, class K, class V, class W>
 inline auto louvainSplitNaiveDynamicOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
   using B = char;
   vector2d<K> qs;
@@ -213,7 +214,7 @@ inline auto louvainSplitNaiveDynamicOmp(const G& y, const vector<tuple<K, K, V>>
     fillValueOmpU(vaff, B(1));
   };
   auto fa = [ ](auto u) { return true; };
-  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+  return louvainSplitInvokeOmp<true>(y, o, fi, fm, fa);
 }
 #endif
 #pragma endregion
@@ -234,7 +235,7 @@ inline auto louvainSplitNaiveDynamicOmp(const G& y, const vector<tuple<K, K, V>>
  * @param o louvain options
  * @returns louvain result
  */
-template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+template <class G, class K, class V, class W>
 inline auto louvainSplitDynamicDeltaScreeningOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
   using  B = char;
   size_t S = y.span();
@@ -257,7 +258,7 @@ inline auto louvainSplitDynamicDeltaScreeningOmp(const G& y, const vector<tuple<
     copyValuesOmpW(vaff, vertices);
   };
   auto fa = [&](auto u) { return vertices[u] == B(1); };
-  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+  return louvainSplitInvokeOmp<true>(y, o, fi, fm, fa);
 }
 #endif
 #pragma endregion
@@ -278,7 +279,7 @@ inline auto louvainSplitDynamicDeltaScreeningOmp(const G& y, const vector<tuple<
  * @param o louvain options
  * @returns louvain result
  */
-template <int SPLIT_CHUNK=2048, class G, class K, class V, class W>
+template <class G, class K, class V, class W>
 inline auto louvainSplitDynamicFrontierOmp(const G& y, const vector<tuple<K, K, V>>& deletions, const vector<tuple<K, K, V>>& insertions, const vector<K>& q, const vector<W>& qvtot, const vector<W>& qctot, const LouvainOptions& o={}) {
   vector2d<K> qs;
   vector2d<W> qvtots, qctots;
@@ -294,7 +295,7 @@ inline auto louvainSplitDynamicFrontierOmp(const G& y, const vector<tuple<K, K, 
     louvainAffectedVerticesFrontierOmpW(vaff, y, deletions, insertions, vcom);
   };
   auto fa = [ ](auto u) { return true; };
-  return louvainSplitInvokeOmp<SPLIT_CHUNK, true>(y, o, fi, fm, fa);
+  return louvainSplitInvokeOmp<true>(y, o, fi, fm, fa);
 }
 #endif
 #pragma endregion
